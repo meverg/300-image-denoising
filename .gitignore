@@ -2,6 +2,14 @@
 # Created by https://www.gitignore.io/api/macos,sublimetext
 # Edit at https://www.gitignore.io/?templates=macos,sublimetext
 
+### custom ###
+# mpic++ output junk
+*.dSYM/
+
+code
+code.dSYM
+tmp*
+
 ### macOS ###
 # General
 .DS_Store
