@@ -1,0 +1,28 @@
+CmpE 300 MPI PS
+Date: 05.12.2018
+TA: Burak Suyunu
+
+In the MPI PS, we have followed the tutorials from this website (http://mpitutorial.com/tutorials/). More specificaly, just this (http://mpitutorial.com/tutorials/mpi-hello-world/) and this (http://mpitutorial.com/tutorials/mpi-send-and-receive/) pages. You can find all of the code for this website here (https://github.com/wesleykendall/mpitutorial/tree/gh-pages/tutorials). For the project you won't need any more complex functions than MPI_Send and MPI_Recv. But you are welcome to explore and use more advanced funtions of MPI.
+
+
+Apart from the basics of MPI and simple MPI_Send - MPI_Recv examples from the tutorial, we have imlemented some code for sending and receiving 1D and 2D arrays in MPI. As you will work with a 2D array in your project, I highly recommend you to check the codes. There are 7 C codes. At the beginning of each code, I tried to explain the purpose of the code. 6 of them (send_recv_array{1..6}.c) uses different memory allocation methods for arrays and then tries to send the data using MPI. 'mem_allocate_2d.c' file shows how 3 different memory allocation method differs by printing the memory locations of each array components.
+
+
+In the PS I said that I couldn't find a proper way to send arrays which are dynamically allocated. Actually, after the PS I found something really cool and send_recv_array6.c is implemented using this method.
+
+
+You should be aware of the differences between dynamic and static memory allocation (not just for this project or lecture). It is always useful to know behind the scenes. Here are some fundamental information (source)(http://net-informations.com/faq/net/stack-heap.htm):
+
+"Stack is used for static memory allocation and Heap for dynamic memory allocation, both stored in the computer's RAM.
+
+Variables allocated on the stack are stored directly to the memory and access to this memory is very fast, and it's allocation is dealt with when the program is compiled. When a function or a method calls another function which in turns calls another function etc., the execution of all those functions remains suspended until the very last function returns its value. The stack is always reserved in a LIFO order, the most recently reserved block is always the next block to be freed. This makes it really simple to keep track of the stack, freeing a block from the stack is nothing more than adjusting one pointer.
+
+Variables allocated on the heap have their memory allocated at run time and accessing this memory is a bit slower, but the heap size is only limited by the size of virtual memory . Element of the heap have no dependencies with each other and can always be accessed randomly at any time. You can allocate a block at any time and free it at any time. This makes it much more complex to keep track of which parts of the heap are allocated or free at any given time.
+
+You can use the stack if you know exactly how much data you need to allocate before compile time and it is not too big. You can use heap if you don't know exactly how much data you will need at runtime or if you need to allocate a lot of data."
+
+
+So static allocation uses stack. It is faster. But memory is limited. Dynamic allocation uses heap. A little slower. No memory problem. But you need to keep track of the memory (free the variables manually when you are done).
+
+
+Last but not least, you don't need to use C in your project. MPI is also compatible with C++. So you can use C++ as well.
