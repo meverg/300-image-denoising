@@ -13,6 +13,7 @@
 #include <math.h>
 #include <unistd.h>
 #include <algorithm>
+#include <ctime>
 
 #define PIC_WIDTH 200
 #define PIC_HEGIHT 200
@@ -29,13 +30,14 @@ int main(int argc, char** argv) {
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   slave_count = world_size - 1;
-  max_it = 5000000;
+  max_it = 3000000;
   ppp = PIC_HEGIHT * PIC_WIDTH / slave_count;
   beta = atof(argv[argc-2]);
   pi = atof(argv[argc-1]);
   gamma = 0.5*log((1-pi)/pi);
 
   //sync = 1;
+  srand(time(0));
 
   if (world_rank == 0) {
   	int** arr = NULL;
@@ -188,24 +190,27 @@ int main(int argc, char** argv) {
 
       // MAIN TASK
       // choose random pixel
+      //srand(time(0));
       int row = rand() % (PIC_HEGIHT/slave_count) + 1;
       int col = rand() % PIC_WIDTH;
-      //printf(" row/col: %d/%d ", row, col);
+      //printf(" row/col: %d/%d \n", row, col);
 
       // calculate acceptance probability
       float accept;
       int nei_sum = -two_d_subarr_curr[row][col];
       for(int i = row-1 ; i <= row+1; i++) {
         for (int j = col-1 ; j <= col+1; j++) {
-          nei_sum += two_d_subarr_curr[row][col];
+          //printf(" nei_sum is now: %d ", nei_sum);
+          nei_sum += two_d_subarr_curr[i][j];
         }
       }
       //printf(" nei_sum is now: %d ", nei_sum);
       accept = exp(- (2 * gamma * two_d_subarr[row][col] * two_d_subarr_curr[row][col]) - (2 * beta * two_d_subarr_curr[row][col] * nei_sum));
       // printf("\n %f %f \n", - (2 * gamma * two_d_subarr[row][col] * two_d_subarr_curr[row][col]), - (2 * beta * two_d_subarr_curr[row][col] * nei_sum));
       accept = min(accept, (float)1);
+      //srand(time(0));
       float new_rand = ((float)rand())/RAND_MAX;
-      // printf(" accept is now: %f/%f ", accept, new_rand);
+      //printf(" accept is now: %f/%f \n", accept, new_rand);
       if (accept > new_rand ) {
         two_d_subarr_curr[row][col] = -two_d_subarr_curr[row][col];
         subarr[(row-1) * PIC_WIDTH + col] = -subarr[(row-1) * PIC_WIDTH + col];
