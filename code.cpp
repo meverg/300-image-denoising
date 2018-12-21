@@ -11,27 +11,31 @@
 #include <iostream>
 #include <fstream>
 #include <math.h>
+#include <unistd.h>
+#include <algorithm>
 
-#define PIC_WIDTH 6
-#define PIC_HEGIHT 6
+#define PIC_WIDTH 200
+#define PIC_HEGIHT 200
 
 using namespace std;
 
 int main(int argc, char** argv) {
 	
-	int world_rank, world_size, it_num, ppp, slave_count;
-  float beta, pi, gamma;
+	int world_rank, world_size, it_num, ppp, slave_count, max_it, sync;
+  float beta, pi;
+  double gamma;
 
 	MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &world_size);
   slave_count = world_size - 1;
-  //max_it = 500000/(slave_count*30*30);
+  max_it = 5000000;
   ppp = PIC_HEGIHT * PIC_WIDTH / slave_count;
-  beta = argv[argc-2];
-  pi = argv[argc-1];
+  beta = atof(argv[argc-2]);
+  pi = atof(argv[argc-1]);
   gamma = 0.5*log((1-pi)/pi);
-  printf("beta: %f, pi: %f, gamma: %f", beta, pi, gamma);
+
+  //sync = 1;
 
   if (world_rank == 0) {
   	int** arr = NULL;
@@ -43,8 +47,8 @@ int main(int argc, char** argv) {
   	ifstream in;
     ofstream out;
 
-    in.open("./tmp_input.txt");
-    out.open("./tmp_out.txt");
+    out.open(argv[argc - 3]);
+    in.open(argv[argc - 4]);
 
     for (int i = 0 ; i < slave_count ; i++) {
       for (int j = 0 ; j < ppp ; j++) {
@@ -56,57 +60,74 @@ int main(int argc, char** argv) {
       MPI_Send(arr[(i-1)], ppp, MPI_INT, i, 0, MPI_COMM_WORLD);
     }
 
+    int** out_arr = NULL;
+    out_arr = (int **)malloc(sizeof(int*) * slave_count);
+    for(int i = 0 ; i < slave_count ; i++) {
+      out_arr[i] = (int *)malloc(sizeof(int) * ppp);
+    }
+
     for (int i = 1 ; i <= slave_count ; i++) {
-      MPI_Recv(arr[(i-1)], ppp, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      MPI_Recv(out_arr[(i-1)], ppp, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     int WIDTH_COUNT = 0;
+    int diff_count = 0;
     for (int i = 0 ; i < slave_count ; i++) {
       for (int j = 0 ; j < ppp ; j++) {
-        out << arr[i][j];
+        if(out_arr[i][j] != arr[i][j]){
+          diff_count++;
+        }
+        out << out_arr[i][j];
         out << " ";
         WIDTH_COUNT++;
-      }
-      if (WIDTH_COUNT == PIC_WIDTH) {
-        out << "\n";
-        WIDTH_COUNT = 0;
+        if (WIDTH_COUNT == PIC_WIDTH) {
+          out << "\n";
+          WIDTH_COUNT = 0;
+        }
       }
     }
+    printf("beta: %f, pi: %f, gamma: %f\n", beta, pi, gamma);
+    printf("diff_count: %d\n", diff_count);
 
   } else {
     printf("this is process %d \n", world_rank);
     int* subarr = NULL;
     subarr = (int *)malloc(sizeof(int) * ppp);
     MPI_Recv(subarr, ppp, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    printf("Process %d received elements: ", world_rank);
+    /*printf("Process %d received elements: ", world_rank);
     for(int i = 0 ; i < ppp ; i++) {
       printf("%d ", subarr[i]);
     }
-    printf("\n");
+    printf("\n");*/
 
-    int** 2d_subarr = NULL;
-    2d_subarr = (int **)malloc(sizeof(int*) * (2 + PIC_HEGIHT/slave_count));
-    for(int i = 0 ; i < slave_count ; i++) {
-      2d_subarr[i] = (int *)malloc(sizeof(int) * PIC_WIDTH);
+    int** two_d_subarr = NULL;
+    int** two_d_subarr_curr = NULL;
+    two_d_subarr = (int **)malloc(sizeof(int*) * (2 + PIC_HEGIHT/slave_count));
+    two_d_subarr_curr = (int **)malloc(sizeof(int*) * (2 + PIC_HEGIHT/slave_count));
+    for(int i = 0 ; i < (2 + PIC_HEGIHT/slave_count) ; i++) {
+      two_d_subarr[i] = (int *)malloc(sizeof(int) * PIC_WIDTH);
+      two_d_subarr_curr[i] = (int *)malloc(sizeof(int) * PIC_WIDTH);
     }
 
     int WIDTH_COUNT = 0;
     int HEIGHT_COUNT = 1;
 
     for(int i = 0 ; i < ppp ; i++) {
-      2d_subarr[HEIGHT_COUNT][WIDTH_COUNT] = subarr[i];
+      two_d_subarr[HEIGHT_COUNT][WIDTH_COUNT] = subarr[i];
+      two_d_subarr_curr[HEIGHT_COUNT][WIDTH_COUNT] = subarr[i];
       WIDTH_COUNT++;
-      if (WIDTH_COUNT = PIC_WIDTH) {
+      if (WIDTH_COUNT == PIC_WIDTH) {
         WIDTH_COUNT = 0;
         HEIGHT_COUNT++;
       }
     }
 
     int* topnei = NULL;
-    topnei = (int *)malloc(sizeof(int) * PIC_WIDTH);
+    topnei = (int *)calloc(PIC_WIDTH, sizeof(int));
     int* botnei = NULL;
-    botnei = (int *)malloc(sizeof(int) * PIC_WIDTH);
+    botnei = (int *)calloc(PIC_WIDTH, sizeof(int));
 
+    int accept_count = 0;
     for (int count = 0 ; count < max_it ; count++) {
       
       // EXCHANGE NEIGHBOUR INFO
@@ -129,8 +150,8 @@ int main(int argc, char** argv) {
         }
         MPI_Send(&subarr[0], PIC_WIDTH, MPI_INT, (world_rank-1), 0, MPI_COMM_WORLD);
       }
-
-      printf("topnei for %d : \n", world_rank);
+      // check for nei lines
+      /*printf("topnei for %d : \n", world_rank);
       for(int i = 0 ; i < PIC_WIDTH ; i++)
         printf("%d ", topnei[i]);
       printf("\n");
@@ -138,21 +159,64 @@ int main(int argc, char** argv) {
       printf("botnei for %d : \n", world_rank);
       for(int i = 0 ; i < PIC_WIDTH ; i++)
         printf("%d ", botnei[i]);
-      printf("\n");
+      printf("\n");*/
 
       for(int i = 0 ; i < PIC_WIDTH ; i++) {
-        2d_subarr[0][i] = topnei[i];
+        if (count == 0) {
+          two_d_subarr[0][i] = topnei[i];
+        }
+        two_d_subarr_curr[0][i] = topnei[i];
       }
 
       for(int i = 0 ; i < PIC_WIDTH ; i++) {
-        2d_subarr[(1 + PIC_HEGIHT/slave_count)][i] = botnei[i];
+        if (count == 0) {
+          two_d_subarr[(1 + PIC_HEGIHT/slave_count)][i] = botnei[i];
+        }
+        two_d_subarr_curr[(1 + PIC_HEGIHT/slave_count)][i] = botnei[i];
       }
+
+      //sleep(world_rank*1);
+
+      // check if two_d_subarr is forming up right
+      /*printf("two_d_subarr for %d : \n", world_rank);
+      for(int i = 0 ; i < (2 + PIC_HEGIHT/slave_count) ; i++) {
+        for(int j = 0 ; j < PIC_WIDTH ; j++) {
+          printf("%d ", two_d_subarr[i][j]);
+        }
+        printf("\n");
+      }*/
 
       // MAIN TASK
+      // choose random pixel
+      int row = rand() % (PIC_HEGIHT/slave_count) + 1;
+      int col = rand() % PIC_WIDTH;
+      //printf(" row/col: %d/%d ", row, col);
 
-    
+      // calculate acceptance probability
+      float accept;
+      int nei_sum = -two_d_subarr_curr[row][col];
+      for(int i = row-1 ; i <= row+1; i++) {
+        for (int j = col-1 ; j <= col+1; j++) {
+          nei_sum += two_d_subarr_curr[row][col];
+        }
+      }
+      //printf(" nei_sum is now: %d ", nei_sum);
+      accept = exp(- (2 * gamma * two_d_subarr[row][col] * two_d_subarr_curr[row][col]) - (2 * beta * two_d_subarr_curr[row][col] * nei_sum));
+      // printf("\n %f %f \n", - (2 * gamma * two_d_subarr[row][col] * two_d_subarr_curr[row][col]), - (2 * beta * two_d_subarr_curr[row][col] * nei_sum));
+      accept = min(accept, (float)1);
+      float new_rand = ((float)rand())/RAND_MAX;
+      // printf(" accept is now: %f/%f ", accept, new_rand);
+      if (accept > new_rand ) {
+        two_d_subarr_curr[row][col] = -two_d_subarr_curr[row][col];
+        subarr[(row-1) * PIC_WIDTH + col] = -subarr[(row-1) * PIC_WIDTH + col];
+        //printf(" accepted \n");
+        accept_count++;
+      }
+      // printf(" progress: %d/%d ", count, max_it);
+      // printf("\n");
     } 
     
+    printf("accept_count: %d\n", accept_count);
     MPI_Send(subarr, ppp, MPI_INT, 0, 0, MPI_COMM_WORLD);
   }
 
